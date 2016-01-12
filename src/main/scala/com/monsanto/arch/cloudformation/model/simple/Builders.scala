@@ -95,17 +95,33 @@ trait Route {
 trait Instance {
 
   implicit class RichInstance(ec2: `AWS::EC2::Instance`) {
+
+    @deprecated(message = "Use withEIPInVPC or withEIPInClassic", since = "v3.0.6")
     def withEIP(
       name:      String,
       domain:    String              = "vpc",
       dependsOn: Option[Seq[String]] = None
-    ) =
-      `AWS::EC2::EIP`(
-        name       = name,
-        Domain     = domain,
-        InstanceId = ResourceRef(ec2),
-        DependsOn  = dependsOn
-      )
+    ) : `AWS::EC2::EIP` = withEIPInVPC(name, dependsOn)
+
+    def withEIPInVPC(
+                 name:      String,
+                 dependsOn: Option[Seq[String]] = None
+               ) : `AWS::EC2::EIP` =
+        `AWS::EC2::EIP`.vpc(
+          name       = name,
+          InstanceId = Some(ResourceRef(ec2)),
+          DependsOn  = dependsOn
+        )
+
+    def withEIPInClassic(
+                  name:      String,
+                  dependsOn: Option[Seq[String]] = None
+                ) : `AWS::EC2::EIP` =
+        `AWS::EC2::EIP`.classic(
+          name       = name,
+          InstanceId = Some(ResourceRef(ec2)),
+          DependsOn  = dependsOn
+        )
 
     def alarmOnSystemFailure(name: String, description: String) =
       `AWS::CloudWatch::Alarm`(
@@ -131,6 +147,20 @@ trait Subnet extends AvailabilityZone with Outputs {
   def withRouteTableAssoc(visibility: String, subnetOrdinal: Int, routeTable: Token[ResourceRef[`AWS::EC2::RouteTable`]])(implicit s: `AWS::EC2::Subnet`) =
     s.withRouteTableAssoc( visibility, subnetOrdinal, routeTable )
 
+  def withNAT(
+               ordinal: Int,
+               cfNATLambdaARN: Token[String],
+               vpcGatewayAttachmentResource: `AWS::EC2::VPCGatewayAttachment`,
+               privateRouteTables: Seq[`AWS::EC2::RouteTable`])(implicit s: `AWS::EC2::Subnet`) =
+    s.withNAT(ordinal, cfNATLambdaARN, vpcGatewayAttachmentResource, privateRouteTables)
+
+  def withNAT(
+               ordinal: Int,
+               cfNATLambdaARN: Token[String],
+               vpcGatewayAttachmentResource: `AWS::EC2::VPCGatewayAttachment`,
+               privateRouteTable: `AWS::EC2::RouteTable`)(implicit s: `AWS::EC2::Subnet`) =
+    s.withNAT(ordinal, cfNATLambdaARN, vpcGatewayAttachmentResource, privateRouteTable)
+
   implicit class RichSubnet(s: `AWS::EC2::Subnet`){
     def withRouteTableAssoc(visibility: String, subnetOrdinal: Int, routeTable: Token[ResourceRef[`AWS::EC2::RouteTable`]]) =
       `AWS::EC2::SubnetRouteTableAssociation`(
@@ -138,6 +168,55 @@ trait Subnet extends AvailabilityZone with Outputs {
         SubnetId = s,
         RouteTableId = routeTable
       )
+    def withNAT(
+                 ordinal: Int,
+                 cfNATLambdaARN: Token[String],
+                 vpcGatewayAttachmentResource: `AWS::EC2::VPCGatewayAttachment`,
+                 privateRouteTable: `AWS::EC2::RouteTable`): Template =
+      withNAT(ordinal, cfNATLambdaARN, vpcGatewayAttachmentResource, Seq(privateRouteTable))
+
+    def withNAT(
+             ordinal: Int,
+             cfNATLambdaARN: Token[String],
+             vpcGatewayAttachmentResource: `AWS::EC2::VPCGatewayAttachment`,
+             privateRouteTables: Seq[`AWS::EC2::RouteTable`]): Template = {
+      val natEIP = `AWS::EC2::EIP`.vpc(
+        name = s"NAT${ordinal}EIP",
+        InstanceId = None,
+        DependsOn = Some(Seq(vpcGatewayAttachmentResource.name))
+      )
+
+      val natWaitHandle = `AWS::CloudFormation::WaitConditionHandle`(s"NAT${ordinal}WaitHandle")
+
+      val nat = `Custom::NatGateway`(
+        name=s"NAT${ordinal}",
+        ServiceToken = cfNATLambdaARN,
+        AllocationId = `Fn::GetAtt`(Seq(natEIP.name, "AllocationId")),
+        SubnetId = ResourceRef(s),
+        WaitHandle = ResourceRef(natWaitHandle)
+      )
+
+      val natWaitCondition = `AWS::CloudFormation::WaitCondition`(
+        s"NAT${ordinal}WaitCondition",
+        Handle = ResourceRef(natWaitHandle),
+        Timeout = 240,
+        Count = None,
+        DependsOn = Some(Seq(nat.name))
+      )
+      val privateRoutes = privateRouteTables.map{
+        privateRouteTable => `Custom::NatGatewayRoute`(
+          name = s"NAT${ordinal}Route",
+          ServiceToken = cfNATLambdaARN,
+          RouteTableId = ResourceRef(privateRouteTable),
+          NatGatewayId = ResourceRef(nat),
+          DestinationCidrBlock = CidrBlock(0,0,0,0,0),
+          DependsOn = Some(Seq(natWaitCondition.name))
+        )
+      }
+
+      Template.fromResource(nat) ++ natEIP.andOutput(s"NAT${ordinal}EIP", s"NAT ${ordinal} EIP") ++
+        natWaitCondition ++ natWaitHandle ++ privateRoutes
+    }
   }
 
   private def ucFirst(s: String): String = (s.head.toUpper +: s.tail.toCharArray).mkString

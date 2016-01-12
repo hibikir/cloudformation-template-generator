@@ -83,6 +83,8 @@ describe("Template Lookup") {
 - AWS::AutoScaling::AutoScalingGroup
 - AWS::AutoScaling::LaunchConfiguration
 - AWS::AutoScaling::ScalingPolicy
+- AWS::CloudFormation::WaitCondition
+- AWS::CloudFormation::WaitConditionHandle
 - AWS::CloudWatch::Alarm
 - AWS::DynamoDB::Table
 - AWS::EC2::CustomerGateway
@@ -133,6 +135,34 @@ describe("Template Lookup") {
 - AWS::SNS::TopicPolicy
 - AWS::SQS::Queue
 - AWS::SQS::QueuePolicy
+
+### Custom types
+
+This project packages certain useful custom CloudFormation types.  These are Lambda backed types that perform
+tasks that CloudFormation does not natively support.  In order to use them, you must upload the Lambda function
+to your account and region.  The code for these functions is found in this repo under assets/custom-types
+
+## NAT Gateways
+CloudFormation does not yet support the new managed NAT gateways.  In order to make use of these, a custom
+function has been implemented.  At whatever time Amazon updates CF to support these natively, this functionality
+will be deprecated and removed.  If you use the `Builder`'s `withNAT()` function, we will attempt to make this
+a drop in replacement, though we cannot guarantee you won't need to make any changes to your template until
+we see Amazon's implementation.  
+
+If you use the raw `Custom::NatGateway` and `Custom::NatGatewayRoute` objects directly, you'll need to set up
+WaitCondition and WaitConditionHandles as well.  See the `withNAT()` implementations for more details.
+
+To set up the necessary Lambda functions:
+
+1. Open a shell with the aws cli installed and configured for the AWS account and region you want to deploy to. 
+    You must have permissions to create Lambda functions and IAM roles.
+2. `git clone` this repo.
+3. `cd <this repo>/assets/custom-types/nat-gateway`
+4. Review the code in nat_gateway.js and the policies we're about to create for you. 
+    (Not that you can't trust us, but we're about to upload code to your account and create an IAM role to do things.)
+5. Run ./deploy.sh
+
+Credit for the Lambda function script: http://www.spacevatican.org/2015/12/20/cloudformation-nat-gateway/
 
 ## Releasing
 
