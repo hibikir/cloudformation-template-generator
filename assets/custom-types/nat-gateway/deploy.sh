@@ -1,9 +1,9 @@
 #!/bin/bash
-#mkdir -p target
-#cd target
-#npm install aws-sdk
-#zip -r nat_gateway.zip nat_gateway.js  node_modules/
-#cd ..
+mkdir -p target
+cd target
+npm install aws-sdk
+zip -r nat_gateway.zip nat_gateway.js  node_modules/
+cd ..
 
 account_id=$(aws iam get-user | jq -r .User.Arn |  perl -pe 's/arn:aws:iam::(\d+):.*/$1/')
 
