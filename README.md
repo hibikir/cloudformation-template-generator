@@ -153,8 +153,8 @@ We highly recommend using  the `Builder`'s `withNAT()` function, as it takes car
 
 To set up the necessary Lambda functions:
 
-1. Open a shell with the aws cli installed and configured for the AWS account and region you want to deploy to. 
-    You must have permissions to create Lambda functions and IAM roles.
+1. Open a shell with the `aws` cli installed and configured for the AWS account and region you want to deploy to. 
+    You must have permissions to create Lambda functions and IAM roles.  You also need `npm` installed.
 2. `git clone` this repo.
 3. `cd <this repo>/assets/custom-types/nat-gateway`
 4. Review the code in nat_gateway.js and the policies we're about to create for you, along with deploy.sh. 
