@@ -149,17 +149,17 @@ trait Subnet extends AvailabilityZone with Outputs {
 
   def withNAT(
                ordinal: Int,
-               cfNATLambdaARN: Token[String],
                vpcGatewayAttachmentResource: `AWS::EC2::VPCGatewayAttachment`,
-               privateRouteTables: Seq[`AWS::EC2::RouteTable`])(implicit s: `AWS::EC2::Subnet`) =
-    s.withNAT(ordinal, cfNATLambdaARN, vpcGatewayAttachmentResource, privateRouteTables)
+               privateRouteTables: Seq[`AWS::EC2::RouteTable`],
+               cfNATLambdaARN: Token[String])(implicit s: `AWS::EC2::Subnet`) =
+  s.withNAT(ordinal, vpcGatewayAttachmentResource, privateRouteTables, cfNATLambdaARN)
 
   def withNAT(
                ordinal: Int,
-               cfNATLambdaARN: Token[String],
                vpcGatewayAttachmentResource: `AWS::EC2::VPCGatewayAttachment`,
-               privateRouteTable: `AWS::EC2::RouteTable`)(implicit s: `AWS::EC2::Subnet`) =
-    s.withNAT(ordinal, cfNATLambdaARN, vpcGatewayAttachmentResource, privateRouteTable)
+               privateRouteTable: `AWS::EC2::RouteTable`,
+               cfNATLambdaARN: Token[String])(implicit s: `AWS::EC2::Subnet`) =
+    s.withNAT(ordinal, vpcGatewayAttachmentResource, privateRouteTable, cfNATLambdaARN)
 
   implicit class RichSubnet(s: `AWS::EC2::Subnet`){
     def withRouteTableAssoc(visibility: String, subnetOrdinal: Int, routeTable: Token[ResourceRef[`AWS::EC2::RouteTable`]]) =
@@ -170,16 +170,16 @@ trait Subnet extends AvailabilityZone with Outputs {
       )
     def withNAT(
                  ordinal: Int,
-                 cfNATLambdaARN: Token[String],
                  vpcGatewayAttachmentResource: `AWS::EC2::VPCGatewayAttachment`,
-                 privateRouteTable: `AWS::EC2::RouteTable`): Template =
-      withNAT(ordinal, cfNATLambdaARN, vpcGatewayAttachmentResource, Seq(privateRouteTable))
+                 privateRouteTable: `AWS::EC2::RouteTable`,
+                 cfNATLambdaARN: Token[String]): Template =
+      withNAT(ordinal, vpcGatewayAttachmentResource, Seq(privateRouteTable), cfNATLambdaARN)
 
     def withNAT(
              ordinal: Int,
-             cfNATLambdaARN: Token[String],
              vpcGatewayAttachmentResource: `AWS::EC2::VPCGatewayAttachment`,
-             privateRouteTables: Seq[`AWS::EC2::RouteTable`]): Template = {
+             privateRouteTables: Seq[`AWS::EC2::RouteTable`],
+             cfNATLambdaARN: Token[String]): Template = {
       val natEIP = `AWS::EC2::EIP`.vpc(
         name = s"NAT${ordinal}EIP",
         InstanceId = None,

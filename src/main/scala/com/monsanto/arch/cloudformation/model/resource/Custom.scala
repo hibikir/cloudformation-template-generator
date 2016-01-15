@@ -1,16 +1,16 @@
 package com.monsanto.arch.cloudformation.model.resource
 
-import com.monsanto.arch.cloudformation.model.{ConditionRef, Token}
+import com.monsanto.arch.cloudformation.model._
 import spray.json.JsonFormat
 
 /**
   * Created by bkrodg on 1/11/16.
   */
 case class `Custom::NatGateway`(name: String,
-                                ServiceToken: Token[String],
                                 AllocationId: Token[String],
                                 SubnetId: Token[`AWS::EC2::Subnet`],
                                 WaitHandle: Token[`AWS::CloudFormation::WaitConditionHandle`],
+                                ServiceToken: Token[String],
                                 override val Condition: Option[ConditionRef] = None,
                                 override val DependsOn: Option[Seq[String]] = None)
   extends Resource[`Custom::NatGateway`] {
@@ -18,17 +18,17 @@ case class `Custom::NatGateway`(name: String,
 }
 
 object `Custom::NatGateway` {
-
+  val defaultServiceToken = `Fn::Join`(":", Seq("arn:aws:lambda", `AWS::Region`, `AWS::AccountId`, "function:cf-nat-gateway"))
   import spray.json.DefaultJsonProtocol._
 
   implicit def format: JsonFormat[`Custom::NatGateway`] = jsonFormat7(`Custom::NatGateway`.apply)
 }
 
 case class `Custom::NatGatewayRoute`(name: String,
-                                     ServiceToken: Token[String],
                                      RouteTableId: Token[`AWS::EC2::RouteTable`],
                                      DestinationCidrBlock: Token[CidrBlock],
                                      NatGatewayId: Token[`Custom::NatGateway`],
+                                     ServiceToken: Token[String],
                                      override val Condition: Option[ConditionRef] = None,
                                      override val DependsOn: Option[Seq[String]] = None)
   extends Resource[`Custom::NatGatewayRoute`] {
