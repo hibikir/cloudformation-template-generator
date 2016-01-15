@@ -160,7 +160,8 @@ To set up the necessary Lambda functions:
 4. Review the code in nat_gateway.js and the policies we're about to create for you, along with deploy.sh. 
     (Not that you can't trust us, but we're about to upload code to your account and create an IAM role to do things.)
 5. WARNING: This will deploy the Lambda function as `cf-nat-gateway` in your account.  
-    *IN THE UNLIKELY EVENT YOU ARE ALREADY USING THIS NAME, IT WILL BE OVERWRITTEN!*
+    *IN THE UNLIKELY EVENT YOU ARE ALREADY USING THIS NAME, IT WILL BE OVERWRITTEN!* You can change this in the script,
+    but will need to pass in the ARN, instead of using he default as described below.
 6. Run ./deploy.sh
 
 The `ServiceToken` parameter (or `cfNATLambdaARN` parameter in `withNat()`) needs to be the ARN to the Lambda function.
