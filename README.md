@@ -140,7 +140,7 @@ describe("Template Lookup") {
 
 This project packages certain useful custom CloudFormation types.  These are Lambda backed types that perform
 tasks that CloudFormation does not natively support.  In order to use them, you must upload the Lambda function
-to your account and region.  The code for these functions is found in this repo under assets/custom-types
+to your account and region.  The code for these functions is found in this repo under assets/custom-types.
 
 ## NAT Gateways
 CloudFormation does not yet support the new managed NAT gateways.  In order to make use of these, a custom
