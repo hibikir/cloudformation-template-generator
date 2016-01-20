@@ -5,6 +5,24 @@ import spray.json._
 
 class EC2_UT extends FunSpec with Matchers {
 
+  describe("VPNGateway"){
+    val vpnType = "ipsec.1"
+    val vpnGateway = `AWS::EC2::VPNGateway`(
+      "vpnGateway",
+      vpnType,
+      Seq()
+    )
+    it("should create a VPNGateway") {
+      val expected = JsObject(
+        "vpnGateway" -> JsObject(
+          "Type" -> JsString(vpnType),
+          "Properties" -> JsObject(
+            "Tags" -> JsArray()
+          )
+        )
+      )
+    }
+  }
   describe("CidrBlock"){
 
     val cidr = CidrBlock(192,168,1,2,32)

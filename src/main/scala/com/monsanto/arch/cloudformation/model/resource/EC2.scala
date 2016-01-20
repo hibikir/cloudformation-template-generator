@@ -108,6 +108,19 @@ object `AWS::EC2::CustomerGateway` extends DefaultJsonProtocol {
   implicit val format: JsonFormat[`AWS::EC2::CustomerGateway`] = jsonFormat6(`AWS::EC2::CustomerGateway`.apply)
 }
 
+case class `AWS::EC2::VPNGateway`(
+  name: String,
+  Type: String,
+  Tags: Seq[AmazonTag],
+  override val Condition: Option[ConditionRef] = None) extends Resource[`AWS::EC2::VPNGateway`]{
+
+  def when(newCondition: Option[ConditionRef] = Condition) = copy(Condition = newCondition)
+}
+object `AWS::EC2::VPNGateway` extends DefaultJsonProtocol {
+  implicit val format: JsonFormat[`AWS::EC2::VPNGateway`] = jsonFormat4(`AWS::EC2::VPNGateway`.apply)
+}
+
+
 @implicitNotFound("A Route can only have exactly ONE of GatewayId, InstanceId, NetworkInterfaceId or VpcPeeringConnectionId set")
 class ValidRouteCombo[G, I, P] private ()
 object ValidRouteCombo{
@@ -377,17 +390,69 @@ object `AWS::EC2::VPCPeeringConnection` extends DefaultJsonProtocol {
   implicit val format: JsonFormat[`AWS::EC2::VPCPeeringConnection`] = jsonFormat5(`AWS::EC2::VPCPeeringConnection`.apply)
 }
 
-case class `AWS::EC2::VPCGatewayAttachment`(
-  name:              String,
-  VpcId:             Token[ResourceRef[`AWS::EC2::VPC`]],
-  InternetGatewayId: Token[ResourceRef[`AWS::EC2::InternetGateway`]],
+class ValidVPCGatewayCombo[V, I] private ()
+object ValidVPCGatewayCombo {
+  implicit object valid1T extends ValidVPCGatewayCombo[Some[Token[ResourceRef[`AWS::EC2::VPNGateway`]]], None.type]
+  implicit object valid1 extends ValidVPCGatewayCombo[Some[ResourceRef[`AWS::EC2::VPNGateway`]], None.type]
+  implicit object valid2T extends ValidVPCGatewayCombo[None.type , Some[Token[ResourceRef[`AWS::EC2::InternetGateway`]]]]
+  implicit object valid2 extends ValidVPCGatewayCombo[None.type , Some[ResourceRef[`AWS::EC2::InternetGateway`]]]
+}
+class `AWS::EC2::VPCGatewayAttachment` private (
+  val name:              String,
+  val VpcId:             Token[ResourceRef[`AWS::EC2::VPC`]],
+  val VpnGatewayId:      Option[Token[ResourceRef[`AWS::EC2::VPNGateway`]]] = None,
+  val InternetGatewayId: Option[Token[ResourceRef[`AWS::EC2::InternetGateway`]]] = None,
   override val Condition: Option[ConditionRef] = None
   ) extends Resource[`AWS::EC2::VPCGatewayAttachment`]{
+  private val asSeq = Seq(name, VpcId, VpnGatewayId, InternetGatewayId,
+    Condition)
 
-  def when(newCondition: Option[ConditionRef] = Condition) = copy(Condition = newCondition)
+  def when(newCondition: Option[ConditionRef] = Condition) =
+    new `AWS::EC2::VPCGatewayAttachment`(name, VpcId, VpnGatewayId, InternetGatewayId,
+      newCondition )
+
 }
+
 object `AWS::EC2::VPCGatewayAttachment` extends DefaultJsonProtocol {
-  implicit val format: JsonFormat[`AWS::EC2::VPCGatewayAttachment`] = jsonFormat4(`AWS::EC2::VPCGatewayAttachment`.apply)
+
+  private def writeField[T: JsonFormat](t: T) = {
+    val writer = implicitly[JsonFormat[T]]
+    writer match {
+      case _: OptionFormat[_] if t == None => None
+      case _ => Some(writer.write(t))
+    }
+  }
+
+  // Because we dont want the default case class apply method without our checks
+  implicit val format: JsonFormat[`AWS::EC2::VPCGatewayAttachment`] = new JsonFormat[`AWS::EC2::VPCGatewayAttachment`]{
+    def write(p: `AWS::EC2::VPCGatewayAttachment`) = {
+      JsObject(
+        Map(
+          "name"                   -> writeField(p.name),
+          "VpcId"                  -> writeField(p.VpcId),
+          "VpnGatewayId"           -> writeField(p.VpnGatewayId),
+          "InternetGatewayId"      -> writeField(p.InternetGatewayId),
+          "Condition"              -> writeField(p.Condition)
+        ).filter(_._2.isDefined).mapValues(_.get)
+      )
+    }
+
+    // TODO
+    def read(json: JsValue) = ???
+  }
+
+  def apply[
+    V <: Option[Token[ResourceRef[`AWS::EC2::VPNGateway`]]],
+    I <: Option[Token[ResourceRef[`AWS::EC2::InternetGateway`]]]
+  ](
+    name:                         String,
+    VpcId:                        Token[ResourceRef[`AWS::EC2::VPC`]],
+    VpnGatewayId:                 V = None,
+    InternetGatewayId:            I = None,
+    Condition: Option[ConditionRef] = None
+   )(implicit ev2: ValidVPCGatewayCombo[V, I]) =
+    new `AWS::EC2::VPCGatewayAttachment`(name, VpcId, VpnGatewayId, InternetGatewayId,
+      Condition )
 }
 
 case class `AWS::EC2::Volume` private (

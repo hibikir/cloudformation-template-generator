@@ -468,7 +468,7 @@ trait Gateway {
 
     val attName = "GatewayToInternet"
     val attachment = `AWS::EC2::VPCGatewayAttachment`(
-      attName,
+      name = attName,
       VpcId = vpc,
       InternetGatewayId = gateway
     )
