@@ -622,6 +622,7 @@ trait ElasticLoadBalancing {
       name:              String,
       subnets:           Seq[Token[ResourceRef[`AWS::EC2::Subnet`]]],
       healthCheckTarget: String,
+      loadBalancerName:  Option[Token[String]] = None,
       condition:         Option[ConditionRef] = None,
       scheme:            Option[ELBScheme] = None,
       loggingBucket:     Option[Token[ResourceRef[`AWS::S3::Bucket`]]] = None,
@@ -642,6 +643,7 @@ trait ElasticLoadBalancing {
       Scheme              = scheme,
       Subnets             = subnets,
       Listeners           = listeners,
+      LoadBalancerName    = loadBalancerName,
       HealthCheck         = Some(healthCheck),
       Tags                = AmazonTag.fromName(name),
       AccessLoggingPolicy = loggingBucket match {
@@ -661,6 +663,7 @@ trait ElasticLoadBalancing {
       name:              String,
       subnets:           Seq[Token[ResourceRef[`AWS::EC2::Subnet`]]],
       healthCheckTarget: String,
+      loadBalancerName:  Option[Token[String]] = None,
       condition:         Option[ConditionRef] = None,
       scheme:            Option[ELBScheme] = None,
       loggingBucket:     Option[Token[ResourceRef[`AWS::S3::Bucket`]]] = None,
@@ -675,5 +678,5 @@ trait ElasticLoadBalancing {
         Interval           = "30",
         Timeout            = "5")
     )(implicit vpc: `AWS::EC2::VPC`) =
-      elbL(name, subnets, healthCheckTarget, condition, scheme, loggingBucket, dependsOn)(Seq(listener))(healthCheck)
+      elbL(name, subnets, healthCheckTarget, loadBalancerName, condition, scheme, loggingBucket, dependsOn)(Seq(listener))(healthCheck)
 }
