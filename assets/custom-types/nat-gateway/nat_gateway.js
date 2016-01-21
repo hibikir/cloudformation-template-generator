@@ -19,7 +19,6 @@ exports.handler = function(event, context) {
 var handleRoute = function(event, context) {
     var destinationCidrBlock = event.ResourceProperties.DestinationCidrBlock;
     var routeTableId = event.ResourceProperties.RouteTableId;
-    var responseData = {};
     if (!destinationCidrBlock) {
         errMsg = "missing parameter DestinationCidrBlock";
         console.log(errMsg);
@@ -54,7 +53,6 @@ var handleRoute = function(event, context) {
 };
 
 var deleteRoute = function(event, context) {
-    var responseData = {};
     var destinationCidrBlock = event.ResourceProperties.DestinationCidrBlock;
     var routeTableId = event.ResourceProperties.RouteTableId;
 
@@ -87,7 +85,6 @@ var deleteRoute = function(event, context) {
 
 
 var createRoute = function(event, context) {
-    var responseData = {};
     var destinationCidrBlock = event.ResourceProperties.DestinationCidrBlock;
     var routeTableId = event.ResourceProperties.RouteTableId;
     var natGatewayId = event.ResourceProperties.NatGatewayId;
@@ -117,7 +114,6 @@ var createRoute = function(event, context) {
 };
 
 var replaceRoute = function(event, context) {
-    var responseData = {};
     var destinationCidrBlock = event.ResourceProperties.DestinationCidrBlock;
     var routeTableId = event.ResourceProperties.RouteTableId;
     var natGatewayId = event.ResourceProperties.NatGatewayId;
@@ -165,7 +161,6 @@ var handleGateway = function(event, context) {
 };
 
 var createGateway = function(event, context) {
-    var responseData = {};
     var subnetId = event.ResourceProperties.SubnetId;
     var allocationId = event.ResourceProperties.AllocationId;
     var waitHandle = event.ResourceProperties.WaitHandle;
@@ -232,7 +227,6 @@ var waitForGatewayStateChange = function (id, states, onComplete){
 };
 
 var deleteGateway = function(event, context) {
-    var responseData = {};
     if (event.PhysicalResourceId && event.PhysicalResourceId.match(/^nat-/)) {
         var ec2 = new aws.EC2();
         ec2.deleteNatGateway({
