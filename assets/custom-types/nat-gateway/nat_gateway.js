@@ -2,7 +2,7 @@
 // https://gist.github.com/fcheung/baec53381350a4b11037
 
 var aws = require('aws-sdk');
-var ec2 = new aws.EC2();
+aws.config.update({maxRetries: 100});
 
 exports.handler = function(event, context) {
     if (event.ResourceType === 'Custom::NatGateway') {
@@ -10,10 +10,9 @@ exports.handler = function(event, context) {
     } else if (event.ResourceType === 'Custom::NatGatewayRoute') {
         handleRoute(event, context);
     } else {
-        console.log("Unknown resource type: " + event.ResourceType);
-        response.send(event, context, {
-            Error: "unknown resource type: " + event.ResourceType
-        }, response.FAILED);
+        errMsg = "unknown resource type: " + event.ResourceType;
+        console.log(errMsg);
+        response.send(event, context, response.FAILED, errMsg);
     }
 };
 
@@ -22,20 +21,16 @@ var handleRoute = function(event, context) {
     var routeTableId = event.ResourceProperties.RouteTableId;
     var responseData = {};
     if (!destinationCidrBlock) {
-        responseData = {
-            Error: "missing parameter DestinationCidrBlock "
-        };
-        console.log(responseData.Error);
-        response.send(event, context, response.FAILED, responseData);
+        errMsg = "missing parameter DestinationCidrBlock";
+        console.log(errMsg);
+        response.send(event, context, response.FAILED, errMsg);
         return;
     }
     else {
         if (!routeTableId) {
-            responseData = {
-                Error: "missing parameter RouteTableId "
-            };
-            console.log(responseData.Error);
-            response.send(event, context, response.FAILED, responseData);
+            errMsg = "missing parameter RouteTableId";
+            console.log(errMsg);
+            response.send(event, context, response.FAILED, errMsg);
             return;
         }
     }
@@ -52,10 +47,9 @@ var handleRoute = function(event, context) {
             createRoute(event, context);
         }
     } else {
-        console.log("Unknown request type " + event.RequestType);
-        response.send(event, context, {
-            Error: "unknown request type: " + event.RequestType
-        }, response.FAILED);
+        errMsg = "unknown request type: " + event.RequestType;
+        console.log(errMsg);
+        response.send(event, context, response.FAILED, errMsg);
     }
 };
 
@@ -65,25 +59,29 @@ var deleteRoute = function(event, context) {
     var routeTableId = event.ResourceProperties.RouteTableId;
 
     if(event.PhysicalResourceId.match(/^gateway-route-/)){
-
+        var ec2 = new aws.EC2();
         ec2.deleteRoute({
             RouteTableId: routeTableId,
             DestinationCidrBlock: destinationCidrBlock
         }, function(err, data) {
             if (err) {
-                responseData = {
-                    Error: "delete route failed " + err
-                };
-                console.log(responseData.Error);
-                response.send(event, context, response.FAILED, responseData);
-
+                if (err.code != "InvalidRoute.NotFound") {
+                    errMsg = "WARNING: " + err;
+                    console.log(errMsg);
+                    response.send(event, context, response.SUCCESS, errMsg, {}, physicalId(event.ResourceProperties));
+                } else {
+                    errMsg = "delete route failed" + err;
+                    console.log(errMsg);
+                    response.send(event, context, response.FAILED, errMsg);
+                }
             } else {
-                response.send(event, context, response.SUCCESS, {}, physicalId(event.ResourceProperties));
+                response.send(event, context, response.SUCCESS, null, {}, physicalId(event.ResourceProperties));
             }
         });
-    }else{
-        console.log("unexpected physical id for route " + event.PhysicalResourceId + " - ignoring");
-        response.send(event, context, response.SUCCESS, {});
+    } else {
+        errMsg = "unexpected physical id for route " + event.PhysicalResourceId + " - ignoring";
+        console.log(errMsg);
+        response.send(event, context, response.SUCCESS, errMsg);
     }
 };
 
@@ -95,28 +93,25 @@ var createRoute = function(event, context) {
     var natGatewayId = event.ResourceProperties.NatGatewayId;
 
     if (natGatewayId) {
+        var ec2 = new aws.EC2();
         ec2.createRoute({
             RouteTableId: routeTableId,
             DestinationCidrBlock: destinationCidrBlock,
             NatGatewayId: natGatewayId
         }, function(err, data) {
             if (err) {
-                responseData = {
-                    Error: "create route failed " + err
-                };
-                console.log(responseData.Error);
-                response.send(event, context, response.FAILED, responseData);
+                errMsg = "create route failed: " + err;
+                console.log(errMsg);
+                response.send(event, context, response.FAILED, errMsg);
 
             } else {
-                response.send(event, context, response.SUCCESS, {}, physicalId(event.ResourceProperties));
+                response.send(event, context, response.SUCCESS, null, {}, physicalId(event.ResourceProperties));
             }
         });
     } else {
-        responseData = {
-            Error: "missing parameter natGatewayId "
-        };
-        console.log(responseData.Error);
-        response.send(event, context, response.FAILED, responseData);
+        errMsg = "missing parameter natGatewayId";
+        console.log(errMsg);
+        response.send(event, context, response.FAILED, errMsg);
         return;
     }
 };
@@ -128,28 +123,25 @@ var replaceRoute = function(event, context) {
     var natGatewayId = event.ResourceProperties.NatGatewayId;
 
     if (natGatewayId) {
+        var ec2 = new aws.EC2();
         ec2.replaceRoute({
             RouteTableId: routeTableId,
             DestinationCidrBlock: destinationCidrBlock,
             NatGatewayId: natGatewayId
         }, function(err, data) {
             if (err) {
-                responseData = {
-                    Error: "create route failed " + err
-                };
-                console.log(responseData.Error);
-                response.send(event, context, response.FAILED, responseData);
+                errMsg = "create route failed: " + err;
+                console.log(errMsg);
+                response.send(event, context, response.FAILED, errMsg);
 
             } else {
-                response.send(event, context, response.SUCCESS, {}, physicalId(event.ResourceProperties));
+                response.send(event, context, response.SUCCESS, null, {}, physicalId(event.ResourceProperties));
             }
         });
     } else {
-        responseData = {
-            Error: "missing parameter natGatewayId "
-        };
-        console.log(responseData.Error);
-        response.send(event, context, response.FAILED, responseData);
+        errMsg = "missing parameter natGatewayId";
+        console.log(errMsg);
+        response.send(event, context, response.FAILED, errMsg);
         return;
     }
 };
@@ -166,9 +158,9 @@ var handleGateway = function(event, context) {
     } else if (event.RequestType === 'Update' || event.RequestType === 'Create') {
         createGateway(event, context);
     } else {
-        response.send(event, context, {
-            Error: "unknown type: " + event.RequestType
-        }, response.FAILED);
+        errMsg = "unknown type: " + event.RequestType;
+        console.log(errMsg);
+        response.send(event, context, response.FAILED, errMsg);
     }
 };
 
@@ -179,20 +171,17 @@ var createGateway = function(event, context) {
     var waitHandle = event.ResourceProperties.WaitHandle;
 
     if (subnetId && allocationId) {
+        var ec2 = new aws.EC2();
         ec2.createNatGateway({
             AllocationId: allocationId,
             SubnetId: subnetId
         }, function(err, data) {
             if (err) {
-                responseData = {
-                    Error: "create gateway failed " + err
-                };
-                console.log(responseData.Error);
-                response.send(event, context, response.FAILED, responseData);
+                errMsg = "create gateway failed: " + err;
+                console.log(errMsg);
+                response.send(event, context, response.FAILED, errMsg);
             } else {
-                responseData = {
-                }
-                response.send(event, context, response.SUCCESS, responseData, data.NatGateway.NatGatewayId, true);
+                response.send(event, context, response.SUCCESS, null, {}, data.NatGateway.NatGatewayId, true);
 
                 waitForGatewayStateChange(data.NatGateway.NatGatewayId, ['available', 'failed'], function(state){
                     if(waitHandle){
@@ -201,7 +190,7 @@ var createGateway = function(event, context) {
                             "UniqueId": data.NatGateway.NatGatewayId,
                             "Data": "Gateway has state " + state,
                             "Reason": ""
-                        }
+                        };
                         sendSignal(waitHandle, context, signalData);
                     }else{
                         if(state != 'available'){
@@ -214,22 +203,19 @@ var createGateway = function(event, context) {
         })
     } else {
         if (!subnetId) {
-            responseData = {
-                Error: 'subnet id not specified'
-            };
-            console.log(responseData.Error);
-            response.send(event, context, response.FAILED, responseData);
+            errMsg = "subnet id not specified";
+            console.log(errMsg);
+            response.send(event, context, response.FAILED, errMsg);
         } else {
-            responseData = {
-                Error: 'allocationId not specified'
-            };
-            console.log(responseData.Error);
-            response.send(event, context, response.FAILED, responseData);
+            errMsg = "allocationId not specified";
+            console.log(errMsg);
+            response.send(event, context, response.FAILED, errMsg);
         }
     }
 };
 
 var waitForGatewayStateChange = function (id, states, onComplete){
+    var ec2 = new aws.EC2();
     ec2.describeNatGateways({NatGatewayIds: [id], Filter: [{Name: "state", Values: states}]}, function(err, data){
         if(err){
             console.log("could not describeNatGateways " + err);
@@ -248,26 +234,26 @@ var waitForGatewayStateChange = function (id, states, onComplete){
 var deleteGateway = function(event, context) {
     var responseData = {};
     if (event.PhysicalResourceId && event.PhysicalResourceId.match(/^nat-/)) {
+        var ec2 = new aws.EC2();
         ec2.deleteNatGateway({
             NatGatewayId: event.PhysicalResourceId
         }, function(err, data) {
             if (err) {
-                responseData = {
-                    Error: "delete gateway failed " + err
-                };
-                console.log(responseData.Error);
-                response.send(event, context, response.FAILED, responseData, event.PhysicalResourceId);
+                errMsg = "delete gateway failed " + err;
+                console.log(errMsg);
+                response.send(event, context, response.FAILED, errMsg, null, event.PhysicalResourceId);
             } else {
                 waitForGatewayStateChange(event.PhysicalResourceId, ['deleted'], function(state){
-                    response.send(event, context, response.SUCCESS, {}, event.PhysicalResourceId);
+                    response.send(event, context, response.SUCCESS, null, {}, event.PhysicalResourceId);
                 });
             }
         })
     } else {
-        console.log("No valid physical resource id passed to destroy - ignoring " + event.PhysicalResourceId);
-        response.send(event, context, response.SUCCESS, responseData, event.PhysicalResourceId);
+        errMsg = "No valid physical resource id passed to destroy - ignoring " + event.PhysicalResourceId
+        console.log(errMsg);
+        response.send(event, context, response.SUCCESS, errMsg, null, event.PhysicalResourceId);
     }
-}
+};
 
 
 var sendSignal = function(handle, context, data){
@@ -314,16 +300,24 @@ var sendSignal = function(handle, context, data){
  A copy of the License is located at http://aws.amazon.com/agreement/.
  This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, express or implied.
  See the License for the specific language governing permissions and limitations under the License. */
-var response = {}
+var response = {};
 
 response.SUCCESS = "SUCCESS";
 response.FAILED = "FAILED";
 
-response.send = function(event, context, responseStatus, responseData, physicalResourceId, continueFuncton) {
+response.send = function(event, context, responseStatus, responseReason, responseData, physicalResourceId, continueFuncton) {
+    reason = "CloudWatch Log Stream: " + context.logGroupName + " -- " + context.logStreamName
+    if (responseReason) {
+        reason = responseReason + " - " + reason
+    }
+
+    if (!responseData) {
+        responseData = {}
+    }
 
     var responseBody = JSON.stringify({
         Status: responseStatus,
-        Reason: "See the details in CloudWatch Log Stream: " + context.logStreamName,
+        Reason: reason,
         PhysicalResourceId: physicalResourceId || context.logStreamName,
         StackId: event.StackId,
         RequestId: event.RequestId,
@@ -363,4 +357,4 @@ response.send = function(event, context, responseStatus, responseData, physicalR
 
     request.write(responseBody);
     request.end();
-}
+};
