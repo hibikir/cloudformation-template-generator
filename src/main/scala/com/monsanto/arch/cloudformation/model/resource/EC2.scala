@@ -120,6 +120,17 @@ object `AWS::EC2::VPNGateway` extends DefaultJsonProtocol {
   implicit val format: JsonFormat[`AWS::EC2::VPNGateway`] = jsonFormat4(`AWS::EC2::VPNGateway`.apply)
 }
 
+sealed trait ValidRouteComboOption
+case class InternetGatewayRoute(v:Token[ResourceRef[`AWS::EC2::InternetGateway`]]) extends ValidRouteComboOption
+case class EC2InstanceRoute(v:Token[ResourceRef[`AWS::EC2::Instance`]]) extends ValidRouteComboOption
+case class VPCPeeringRoute(v:Token[ResourceRef[`AWS::EC2::VPCPeeringConnection`]]) extends ValidRouteComboOption
+
+
+object ValidRouteComboOption {
+  implicit def toInternetGateway[T](v: T)(implicit t:T => Token[ResourceRef[`AWS::EC2::InternetGateway`]]) = InternetGatewayRoute(v)
+  implicit def toEC2InstanceRoute[T](v:T)(implicit t :T => Token[ResourceRef[`AWS::EC2::Instance`]]) = EC2InstanceRoute(v)
+  implicit def toVPCPeeringRoute[T](v:T)(implicit t :T => Token[ResourceRef[`AWS::EC2::VPCPeeringConnection`]]) = VPCPeeringRoute(v)
+}
 
 @implicitNotFound("A Route can only have exactly ONE of GatewayId, InstanceId, NetworkInterfaceId or VpcPeeringConnectionId set")
 class ValidRouteCombo[G, I, P] private ()
@@ -180,22 +191,22 @@ object `AWS::EC2::Route` extends DefaultJsonProtocol {
     def read(json: JsValue) = ???
   }
 
-  def apply[
-    G <: Option[Token[ResourceRef[`AWS::EC2::InternetGateway`]]],
-    I <: Option[Token[ResourceRef[`AWS::EC2::Instance`]]],
-    P <: Option[Token[ResourceRef[`AWS::EC2::VPCPeeringConnection`]]]
-  ](
+  def apply(
     name:                         String,
     RouteTableId:                 Token[ResourceRef[`AWS::EC2::RouteTable`]],
     DestinationCidrBlock:         Token[CidrBlock],
-    GatewayId:                    G = None,
-    InstanceId:                   I = None,
-    VpcPeeringConnectionId:       P = None,
+    connectionBobber:             ValidRouteComboOption,
     Condition: Option[ConditionRef] = None,
     DependsOn: Option[Seq[String]] = None
-   )(implicit ev1: ValidRouteCombo[G, I, P]) =
-    new `AWS::EC2::Route`(name, RouteTableId, DestinationCidrBlock, GatewayId, InstanceId, VpcPeeringConnectionId,
-      Condition, DependsOn)
+   ) =
+    connectionBobber match {
+      case InternetGatewayRoute(v) => new `AWS::EC2::Route`(name, RouteTableId, DestinationCidrBlock,
+                                          Some(v), None,None, Condition, DependsOn)
+      case EC2InstanceRoute(v)     => new `AWS::EC2::Route`(name, RouteTableId, DestinationCidrBlock,
+                                          None, Some(v), None, Condition, DependsOn)
+      case VPCPeeringRoute(v)      => new `AWS::EC2::Route`(name, RouteTableId, DestinationCidrBlock,
+                                          None, None ,Some(v), Condition, DependsOn)
+    }
 }
 
 case class `AWS::EC2::RouteTable`(name: String, VpcId: Token[ResourceRef[`AWS::EC2::VPC`]], Tags: Seq[AmazonTag],
@@ -390,13 +401,15 @@ object `AWS::EC2::VPCPeeringConnection` extends DefaultJsonProtocol {
   implicit val format: JsonFormat[`AWS::EC2::VPCPeeringConnection`] = jsonFormat5(`AWS::EC2::VPCPeeringConnection`.apply)
 }
 
-class ValidVPCGatewayCombo[V, I] private ()
-object ValidVPCGatewayCombo {
-  implicit object valid1T extends ValidVPCGatewayCombo[Some[Token[ResourceRef[`AWS::EC2::VPNGateway`]]], None.type]
-  implicit object valid1 extends ValidVPCGatewayCombo[Some[ResourceRef[`AWS::EC2::VPNGateway`]], None.type]
-  implicit object valid2T extends ValidVPCGatewayCombo[None.type , Some[Token[ResourceRef[`AWS::EC2::InternetGateway`]]]]
-  implicit object valid2 extends ValidVPCGatewayCombo[None.type , Some[ResourceRef[`AWS::EC2::InternetGateway`]]]
+trait VPCGatewayOptions
+object VPCGatewayOptions {
+  implicit def toVPNGateway[T](v:T)(implicit t :T => Token[ResourceRef[`AWS::EC2::VPNGateway`]]) = VPNGateway(v)
+  implicit def toInternetGateway[T](v: T)(implicit t:T => Token[ResourceRef[`AWS::EC2::InternetGateway`]]) = InternetGateway(v)
 }
+
+case class VPNGateway(v:Token[ResourceRef[`AWS::EC2::VPNGateway`]]) extends VPCGatewayOptions
+case class InternetGateway(v:Token[ResourceRef[`AWS::EC2::InternetGateway`]]) extends VPCGatewayOptions
+
 class `AWS::EC2::VPCGatewayAttachment` private (
   val name:              String,
   val VpcId:             Token[ResourceRef[`AWS::EC2::VPC`]],
@@ -441,18 +454,17 @@ object `AWS::EC2::VPCGatewayAttachment` extends DefaultJsonProtocol {
     def read(json: JsValue) = ???
   }
 
-  def apply[
-    V <: Option[Token[ResourceRef[`AWS::EC2::VPNGateway`]]],
-    I <: Option[Token[ResourceRef[`AWS::EC2::InternetGateway`]]]
-  ](
+  def apply(
     name:                         String,
     VpcId:                        Token[ResourceRef[`AWS::EC2::VPC`]],
-    VpnGatewayId:                 V = None,
-    InternetGatewayId:            I = None,
+    gatewayId:                  VPCGatewayOptions,
     Condition: Option[ConditionRef] = None
-   )(implicit ev2: ValidVPCGatewayCombo[V, I]) =
-    new `AWS::EC2::VPCGatewayAttachment`(name, VpcId, VpnGatewayId, InternetGatewayId,
-      Condition )
+   ) =
+    gatewayId match {
+      case VPNGateway(e) =>   new `AWS::EC2::VPCGatewayAttachment`(name, VpcId, Some(e), None, Condition )
+      case InternetGateway(e) =>   new `AWS::EC2::VPCGatewayAttachment`(name, VpcId,None, Some(e), Condition )
+    }
+
 }
 
 case class `AWS::EC2::Volume` private (

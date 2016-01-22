@@ -43,9 +43,7 @@ trait Route {
       visibility:        String,
       routeTableOrdinal: Int,
       routeOrdinal:      Int,
-      gateway:           G = None,
-      instance:          I = None,
-      vpcPeeringConn:    P = None,
+      connectionBobber:             ValidRouteComboOption,
       cidr:              CidrBlock = CidrBlock(0,0,0,0,0),
       dependsOn:         Option[Seq[String]] = None
     )(implicit ev1: ValidRouteCombo[G,I,P]) =
@@ -53,9 +51,7 @@ trait Route {
         visibility + "RouteTable" + routeTableOrdinal + "Route" + routeOrdinal,
         RouteTableId           = ResourceRef(rt),
         DestinationCidrBlock   = cidr,
-        GatewayId              = gateway,
-        InstanceId             = instance,
-        VpcPeeringConnectionId = vpcPeeringConn,
+        connectionBobber:             ValidRouteComboOption,
         DependsOn              = dependsOn
       )
 
@@ -65,19 +61,15 @@ trait Route {
       visibility:        String,
       routeTableOrdinal: Int,
       routeOrdinal:      Int,
-      gateway:           GwoT = None,
-      instance:          IwoT = None,
-      vpcPeeringConn:    PwoT = None,
+      connectionBobber:  ValidRouteComboOption,
       cidr:              CidrBlock = CidrBlock(0,0,0,0,0),
       dependsOn:         Option[Seq[String]] = None
-    )(implicit ev1: ValidRouteCombo[G,I,P]) =
-      `AWS::EC2::Route`[G, I, P](
+    ) =
+      `AWS::EC2::Route`(
         visibility + "RouteTable" + routeTableOrdinal + "Route" + routeOrdinal,
         RouteTableId           = ResourceRef(rt),
         DestinationCidrBlock   = cidr,
-        GatewayId              = gateway,
-        InstanceId             = instance,
-        VpcPeeringConnectionId = vpcPeeringConn,
+        connectionBobber       = connectionBobber,
         DependsOn              = dependsOn
       )
   }
@@ -465,12 +457,11 @@ trait Gateway {
       gName,
       Tags = AmazonTag.fromName(gName)
     )
-
     val attName = "GatewayToInternet"
     val attachment = `AWS::EC2::VPCGatewayAttachment`(
       name = attName,
       VpcId = vpc,
-      InternetGatewayId = gateway
+      gatewayId = gateway
     )
 
     (gateway, attachment)
