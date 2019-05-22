@@ -1,6 +1,7 @@
 package com.monsanto.arch.cloudformation.model.resource
 
 import com.monsanto.arch.cloudformation.model._
+import com.monsanto.arch.cloudformation.model.resource.S3VersioningStatus.Enabled
 import org.scalatest.{FunSpec, Matchers}
 import spray.json._
 
@@ -32,6 +33,130 @@ class Kinesis_UT extends FunSpec with Matchers {
       stream.ShardCount shouldEqual IntToken(shardCount)
       stream.RetentionPeriodHours foreach (_ shouldEqual IntToken(retentionPeriodHours))
       stream.Tags.get shouldEqual Seq(AmazonTag("Name", streamName))
+    }
+  }
+
+  describe("FirehoseDeliveryStream") {
+    it("should create a plausible S3 firehose stream config") {
+      val bucket = `AWS::S3::Bucket`("s3bucket", None,
+        VersioningConfiguration = Some(S3VersioningConfiguration(Enabled)))
+      val deliveryRole = `AWS::IAM::Role`("deliveryRole",
+        PolicyDocument(Seq(PolicyStatement(
+          "Allow",
+          Some(DefinedPrincipal(Map("Service" -> Token.fromString("firehose.amazonaws.com")))),
+          Seq("sts:AssumeRole"),
+          Sid = Some(" "),
+          Condition = Some(Map("StringEquals" -> Map("sts:ExternalId" -> SimplePolicyConditionValue("AWS::AccountId"))))
+        ))))
+      val policy = `AWS::IAM::Policy`("deliveryPolicy",
+        PolicyDocument(Seq(
+          PolicyStatement("Allow",
+            Action = Seq("s3:AbortMultipartUpload",
+              "s3:GetBucketLocation",
+              "s3:GetObject",
+              "s3:ListBucket",
+              "s3:ListBucketMultipartUploads",
+              "s3:PutObject"
+            ),
+            Resource = Some(Seq(`Fn::Join`("", Seq(s"arn:aws:s3:::", ResourceRef(bucket))),
+              `Fn::Join`("", Seq(s"arn:aws:s3:::", ResourceRef(bucket), "/*"))))
+
+          ))
+        ), "firehose_delivery_policy",
+        Roles = Some(Seq(ResourceRef(deliveryRole))))
+
+      val stream = `AWS::KinesisFirehose::DeliveryStream`.s3(
+        "deliveryStream",
+        ExtendedS3DestinationConfiguration(`Fn::Join`("", Seq(s"arn:aws:s3:::", ResourceRef(bucket))),
+          ResourceRef(deliveryRole),
+          Some(BufferingHints(Some(60), Some(50))), None,
+          Some(CompressionFormat.UNCOMPRESSED), None, Some("firehose/"),
+          Some(ProcessingConfiguration.enabled(
+            Seq(Processor(
+              Seq(ProcessorParameter("LambdaArn",
+                Token.fromFunction(`Fn::GetAtt`(Seq("myLambda", "Arn")))))
+            ))))
+        ), DependsOn = Some(Seq(policy.name)))
+      val tJson = Template(Resources = Seq(stream, policy, deliveryRole, bucket))
+
+      val deliveryJson = tJson.toJson.asJsObject.fields("Resources")
+        .asJsObject.fields("deliveryStream").asJsObject()
+      deliveryJson.fields("DependsOn") shouldBe JsArray(JsString("deliveryPolicy"))
+
+      deliveryJson.fields("Properties").asJsObject().fields("ExtendedS3DestinationConfiguration")
+        .asJsObject.fields("BufferingHints") shouldBe JsObject(
+        Map("IntervalInSeconds" -> JsNumber(60), "SizeInMBs" -> JsNumber(50))
+      )
+    }
+
+    it("should create a plausible Redshift firehose stream config") {
+      val bucket = `AWS::S3::Bucket`("s3bucket", None,
+        VersioningConfiguration = Some(S3VersioningConfiguration(Enabled)))
+
+      val stream = `AWS::Kinesis::Stream`("stream",Token.fromInt(3))
+
+      val deliveryRole = `AWS::IAM::Role`("deliveryRole",
+        PolicyDocument(Seq(PolicyStatement(
+          "Allow",
+          Some(DefinedPrincipal(Map("Service" -> Token.fromString("firehose.amazonaws.com")))),
+          Seq("sts:AssumeRole"),
+          Sid = Some(" "),
+          Condition = Some(Map("StringEquals" -> Map("sts:ExternalId" -> SimplePolicyConditionValue("AWS::AccountId"))))
+        ))))
+
+
+      val policy = `AWS::IAM::Policy`("deliveryPolicy",
+        PolicyDocument(Seq(
+          PolicyStatement("Allow",
+            Action = Seq("s3:AbortMultipartUpload",
+              "s3:GetBucketLocation",
+              "s3:GetObject",
+              "s3:ListBucket",
+              "s3:ListBucketMultipartUploads",
+              "s3:PutObject"
+            ),
+            Resource = Some(Seq(`Fn::Join`("", Seq(s"arn:aws:s3:::", ResourceRef(bucket))),
+              `Fn::Join`("", Seq(s"arn:aws:s3:::", ResourceRef(bucket), "/*"))))
+
+          ),
+          PolicyStatement("Allow",
+            Action = Seq("kinesis:DescribeStream",
+              "kinesis:GetShardIterator",
+              "kinesis:GetRecords"),
+            Resource = Some(stream.arn)
+          )
+        )), "firehose_delivery_policy",
+        Roles = Some(Seq(ResourceRef(deliveryRole))))
+
+      val firehoseStream = `AWS::KinesisFirehose::DeliveryStream`.redshift(
+        "deliveryStream",
+        RedshiftDestinationConfiguration(
+          "jdbc:redshift://testRedshift.somevpc.us-east-1.redshift.amazonaws.com:5439/dev",
+          CopyCommand.withColumns("format json 'auto'","some_table",Seq("foo","bar","baz")),
+          "superSecretPass",
+          ResourceRef(deliveryRole),
+          S3DestinationConfiguration(`Fn::Join`("", Seq(s"arn:aws:s3:::", ResourceRef(bucket))),
+            BufferingHints(Some(60), Some(50)),
+            None,
+            None,
+            None,
+            Some("redshift-backups/someTable"),
+            ResourceRef(deliveryRole)
+          ),
+          "streamuser",
+          None,
+          )
+        )
+      val tJson = Template(Resources = Seq(stream, policy, deliveryRole, bucket, firehoseStream))
+      val deliveryJson = tJson.toJson.asJsObject.fields("Resources")
+        .asJsObject.fields("deliveryStream").asJsObject()
+      val redshiftJson = deliveryJson.fields("Properties").asJsObject().fields("RedshiftDestinationConfiguration").asJsObject()
+      redshiftJson.fields("CopyCommand").asJsObject().fields("DataTableColumns") match {
+        case JsString(s) => s should include("foo")
+          s should include("bar")
+          s should include("baz")
+        case x => fail("DataTableColumns should be a String, was " + x)
+      }
     }
   }
 }
